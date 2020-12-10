@@ -27,6 +27,10 @@ func dataSourceAwsCustomerGateway() *schema.Resource {
 				Type:     schema.TypeInt,
 				Computed: true,
 			},
+			"certificate_arn": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 			"ip_address": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -80,6 +84,7 @@ func dataSourceAwsCustomerGatewayRead(d *schema.ResourceData, meta interface{}) 
 
 	d.Set("ip_address", cg.IpAddress)
 	d.Set("type", cg.Type)
+	d.Set("certificate_arn", cg.CertificateArn)
 	d.SetId(aws.StringValue(cg.CustomerGatewayId))
 
 	if v := aws.StringValue(cg.BgpAsn); v != "" {
