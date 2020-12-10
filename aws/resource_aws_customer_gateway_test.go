@@ -120,6 +120,37 @@ func TestAccAWSCustomerGateway_similarAlreadyExists(t *testing.T) {
 	})
 }
 
+func TestAccAWSCustomerGateway_certificateArn(t *testing.T) {
+	var gateway ec2.CustomerGateway
+	rBgpAsn := acctest.RandIntRange(64512, 65534)
+	rName := acctest.RandomWithPrefix("tf-acc-test")
+	resourceName := "aws_customer_gateway.test"
+
+	resource.ParallelTest(t, resource.TestCase{
+		PreCheck:      func() { testAccPreCheck(t) },
+		IDRefreshName: resourceName,
+		Providers:     testAccProviders,
+		CheckDestroy:  testAccCheckCustomerGatewayDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCustomerGatewayConfigCertificateArn(rBgpAsn, rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckCustomerGateway(resourceName, &gateway),
+					testAccMatchResourceAttrRegionalARN(resourceName, "arn", "ec2", regexp.MustCompile(`customer-gateway/cgw-.+`)),
+					resource.TestCheckResourceAttr(resourceName, "bgp_asn", strconv.Itoa(rBgpAsn)),
+					resource.TestCheckResourceAttrSet(resourceName, "certificate_arn"),
+					resource.TestCheckResourceAttr(resourceName, "tags.%", "0"),
+				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
 func TestAccAWSCustomerGateway_disappears(t *testing.T) {
 	rBgpAsn := acctest.RandIntRange(64512, 65534)
 	var gateway ec2.CustomerGateway
@@ -298,6 +329,36 @@ resource "aws_customer_gateway" "identical" {
   type       = "ipsec.1"
 }
 `, rBgpAsn)
+}
+
+func testAccCustomerGatewayConfigCertificateArn(rBgpAsn int, rName string) string {
+	return fmt.Sprintf(`
+resource "aws_acmpca_certificate_authority" "test" {
+	permanent_deletion_time_in_days = 7
+	type                            = "ROOT"
+
+	certificate_authority_configuration {
+		key_algorithm     = "RSA_4096"
+		signing_algorithm = "SHA512WITHRSA"
+
+		subject {
+			common_name = "terraformtesting.com"
+		}
+	}
+}
+
+resource "aws_acm_certificate" "test" {
+	domain_name               = "%s.terraformtesting.com"
+    certificate_authority_arn = aws_acmpca_certificate_authority.test.arn
+}
+
+resource "aws_customer_gateway" "test" {
+  bgp_asn         = %d
+  ip_address      = "172.0.0.1"
+  type            = "ipsec.1"
+  certificate_arn = aws_acm_certificate.test.arn
+}
+`, rName, rBgpAsn)
 }
 
 // Change the ip_address.

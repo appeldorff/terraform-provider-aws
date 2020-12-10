@@ -32,7 +32,11 @@ func resourceAwsCustomerGateway() *schema.Resource {
 				ForceNew:     true,
 				ValidateFunc: validate4ByteAsn,
 			},
-
+			"certificate_arn": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ValidateFunc: validateArn,
+			},
 			"ip_address": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -42,7 +46,6 @@ func resourceAwsCustomerGateway() *schema.Resource {
 					validation.IsIPv4Address,
 				),
 			},
-
 			"type": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -67,6 +70,7 @@ func resourceAwsCustomerGatewayCreate(d *schema.ResourceData, meta interface{}) 
 	ipAddress := d.Get("ip_address").(string)
 	vpnType := d.Get("type").(string)
 	bgpAsn := d.Get("bgp_asn").(string)
+	certificateArn := d.Get("certificate_arn").(string)
 
 	alreadyExists, err := resourceAwsCustomerGatewayExists(vpnType, ipAddress, bgpAsn, conn)
 	if err != nil {
@@ -87,6 +91,10 @@ func resourceAwsCustomerGatewayCreate(d *schema.ResourceData, meta interface{}) 
 		PublicIp:          aws.String(ipAddress),
 		Type:              aws.String(vpnType),
 		TagSpecifications: ec2TagSpecificationsFromMap(d.Get("tags").(map[string]interface{}), ec2.ResourceTypeCustomerGateway),
+	}
+
+	if len(certificateArn) != 0 {
+		createOpts.CertificateArn = aws.String(certificateArn)
 	}
 
 	// Create the Customer Gateway.
@@ -217,6 +225,7 @@ func resourceAwsCustomerGatewayRead(d *schema.ResourceData, meta interface{}) er
 	d.Set("bgp_asn", customerGateway.BgpAsn)
 	d.Set("ip_address", customerGateway.IpAddress)
 	d.Set("type", customerGateway.Type)
+	d.Set("certificate_arn", customerGateway.CertificateArn)
 
 	if err := d.Set("tags", keyvaluetags.Ec2KeyValueTags(customerGateway.Tags).IgnoreAws().IgnoreConfig(ignoreTagsConfig).Map()); err != nil {
 		return fmt.Errorf("error setting tags: %s", err)
